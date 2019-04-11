@@ -82,8 +82,6 @@ struct erofs_inode {
 	char i_srcpath[PATH_MAX + 1];
 
 	unsigned char data_mapping_mode;
-	bool compression_disabled;
-
 	unsigned char inode_isize;
 	/* inline tail-end packing size */
 	unsigned short idata_size;
@@ -110,6 +108,14 @@ struct erofs_dentry {
 		erofs_nid_t nid;
 	};
 };
+
+static inline bool is_dot_dotdot(const char *name)
+{
+	if (name[0] != '.')
+		return false;
+
+	return name[1] == '\0' || (name[1] == '.' && name[2] == '\0');
+}
 
 #include <stdio.h>
 #include <string.h>
