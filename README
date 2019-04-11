@@ -1,0 +1,11 @@
+
+The new erofs-utils introduces a completely new framework,
+which is more cleaner but still under development for now.
+
+Use the old the mkfs-dev branch of erofs-utils temporarily
+to build erofs image instead:
+git clone git://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git -b mkfs-dev
+
+Thanks,
+Gao Xiang
+
