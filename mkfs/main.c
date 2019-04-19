@@ -16,6 +16,7 @@
 #include "erofs/cache.h"
 #include "erofs/inode.h"
 #include "erofs/io.h"
+#include "erofs/compress.h"
 
 #define EROFS_SUPER_END (EROFS_SUPER_OFFSET + sizeof(struct erofs_super_block))
 
@@ -43,6 +44,11 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 
 	while ((opt = getopt(argc, argv, "d:z:")) != -1) {
 		switch (opt) {
+		case 'z':
+			cfg.c_compr_alg_master = optarg ?
+				strdup(optarg) : "(default)";
+			break;
+
 		case 'd':
 			cfg.c_dbg_lvl = parse_num_from_str(optarg);
 			break;
@@ -147,6 +153,7 @@ int main(int argc, char **argv)
 		goto exit;
 	}
 
+	z_erofs_compress_init();
 	erofs_inode_manager_init();
 
 	root_inode = erofs_mkfs_build_tree_from_path(NULL, cfg.c_src_path);
@@ -166,6 +173,7 @@ int main(int argc, char **argv)
 	if (!erofs_bflush(NULL))
 		err = -EIO;
 exit:
+	z_erofs_compress_exit();
 	dev_close();
 	erofs_exit_configure();
 
