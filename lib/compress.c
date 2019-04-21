@@ -55,7 +55,7 @@ static void vle_write_indexes_final(struct z_erofs_vle_compress_ctx *ctx)
 }
 
 static void vle_write_indexes(struct z_erofs_vle_compress_ctx *ctx,
-			      unsigned int count, bool raw)
+			      unsigned int count, bool raw, bool dip)
 {
 	unsigned int d0 = 0, d1 = (ctx->clusterofs + count) / EROFS_BLKSIZ;
 	unsigned int clusterofs = ctx->clusterofs;
@@ -92,7 +92,8 @@ static void vle_write_indexes(struct z_erofs_vle_compress_ctx *ctx,
 				Z_EROFS_VLE_CLUSTER_TYPE_HEAD;
 			di.di_u.blkaddr = cpu_to_le32(ctx->blkaddr);
 		}
-		advise = cpu_to_le16(type << Z_EROFS_VLE_DI_CLUSTER_TYPE_BIT);
+		advise = cpu_to_le16(dip << Z_EROFS_VLE_DI_DIP_BIT |
+				     type << Z_EROFS_VLE_DI_CLUSTER_TYPE_BIT);
 		di.di_advise = advise;
 
 		memcpy(ctx->metacur, &di, sizeof(di));
@@ -114,12 +115,15 @@ static int vle_compress_one(struct erofs_inode *inode,
 {
 	struct erofs_compress *const h = &compresshandle;
 	unsigned int len = ctx->tail - ctx->head;
+	bool dip;
 	unsigned int count;
 	int ret;
 	char dst[EROFS_BLKSIZ];
 
 	while (len) {
 		bool raw;
+
+		dip = false;	/* initialize with in-place flag off */
 
 		if (len <= EROFS_BLKSIZ) {
 			if (final)
@@ -159,9 +163,16 @@ nocompression:
 				return ret;
 			raw = true;
 		} else {
+			const void *fakesrc = dst - EROFS_BLKSIZ *
+				(BLK_ROUND_UP(ctx->clusterofs + count) - 1) +
+				ctx->clusterofs;
+
+			dip = h->alg->can_decompress_inplace(h, dst, ret,
+							     fakesrc, count);
+
 			/* write compressed data */
-			erofs_dbg("Writing %u compressed data to block %u",
-				  count, ctx->blkaddr);
+			erofs_dbg("Writing %u compressed data [%c] to block %u",
+				  count, dip ? 'I' : 'O', ctx->blkaddr);
 
 			ret = blk_write(dst, ctx->blkaddr, 1);
 			if (ret)
@@ -171,7 +182,7 @@ nocompression:
 
 		ctx->head += count;
 		/* write compression indexes for this blkaddr */
-		vle_write_indexes(ctx, count, raw);
+		vle_write_indexes(ctx, count, raw, dip);
 
 		++ctx->blkaddr;
 		len -= count;

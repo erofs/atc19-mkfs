@@ -51,11 +51,16 @@ static int compressor_lz4hc_init(struct erofs_compress *c,
 	return 0;
 }
 
+bool lz4_can_decompress_inplace(struct erofs_compress *c,
+				const void *src, unsigned int srcsize,
+				const void *dst, unsigned int dstsize);
+
 struct erofs_compressor erofs_compressor_lz4hc = {
 	.default_level = LZ4HC_CLEVEL_DEFAULT,
 	.best_level = LZ4HC_CLEVEL_MAX,
 	.init = compressor_lz4hc_init,
 	.exit = compressor_lz4hc_exit,
 	.compress_destsize = lz4hc_compress_destsize,
+	.can_decompress_inplace = lz4_can_decompress_inplace,
 };
 

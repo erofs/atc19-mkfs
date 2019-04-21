@@ -24,6 +24,9 @@ struct erofs_compressor {
 				 int compress_level,
 				 void *src, unsigned int *srcsize,
 				 void *dst, unsigned int dstsize);
+	bool (*can_decompress_inplace)(struct erofs_compress *c,
+				       const void *src, unsigned int srcsize,
+				       const void *dst, unsigned int dstsize);
 };
 
 struct erofs_compress {
