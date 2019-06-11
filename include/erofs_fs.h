@@ -49,11 +49,19 @@ struct erofs_super_block {
  * 3~7 - reserved
  */
 enum {
-	EROFS_INODE_LAYOUT_PLAIN,
-	EROFS_INODE_LAYOUT_COMPRESSION,
-	EROFS_INODE_LAYOUT_INLINE,
+	EROFS_INODE_FLAT_PLAIN,
+	EROFS_INODE_FLAT_COMPRESSION_LEGACY,
+	EROFS_INODE_FLAT_INLINE,
+	EROFS_INODE_FLAT_COMPRESSION,
 	EROFS_INODE_LAYOUT_MAX
 };
+
+static inline bool erofs_inode_is_data_compressed(unsigned int datamode)
+{
+	if (datamode == EROFS_INODE_FLAT_COMPRESSION)
+		return true;
+	return datamode == EROFS_INODE_FLAT_COMPRESSION_LEGACY;
+}
 
 /* bit definitions of inode i_advise */
 #define EROFS_I_VERSION_BITS            1
@@ -169,10 +177,57 @@ struct erofs_xattr_entry {
 	sizeof(struct erofs_xattr_entry) + \
 	(entry)->e_name_len + le16_to_cpu((entry)->e_value_size))
 
-/* have to be aligned with 8 bytes on disk */
+/* available compression algorithm types */
+#define Z_EROFS_COMPRESSION_LZ4         0
+
+/*
+ * bit 0 : COMPACTED_2B indexes (0 - off; 1 - on)
+ *  e.g. for 4k logical cluster size,      4B        if compacted 2B is off;
+ *                                  (4B) + 2B + (4B) if compacted 2B is on.
+ */
+#define Z_EROFS_ADVISE_COMPACTED_2B_BIT         0
+
+#define Z_EROFS_ADVISE_COMPACTED_2B     (1 << Z_EROFS_ADVISE_COMPACTED_2B_BIT)
+
+struct z_erofs_map_header {
+	__le32  h_reserved1;
+	__le16  h_advise;
+	/*
+	 * bit 0-3 : algorithm type of head 1 (logical cluster type 01);
+	 * bit 4-7 : algorithm type of head 2 (logical cluster type 11).
+	 */
+	__u8    h_algorithmtype;
+	/*
+	 * bit 0-2 : logical cluster bits - 12, e.g. 0 for 4096;
+	 * bit 3-4 : (physical - logical) cluster bits of head 1:
+	 *       For example, if logical clustersize = 4096, 1 for 8192.
+	 * bit 5-7 : (physical - logical) cluster bits of head 2.
+	 */
+	__u8    h_clusterbits;
+} __packed;
+
+/*
+ * each compacted index includes:
+ *  1) 4-byte blkaddr (ci_blkaddr), which indicates start
+ *     block address of this compacted pack;
+ *  2) each (2+x)-bit represents a logical cluster type, x means
+ *     user-defined bit count, usually x = 0;
+ *
+ *     low 2-bit of logical cluster type:
+ *     00 - shifted plaintext head
+ *     01 - algorithm 1 head
+ *     10 - nonhead
+ *     11 - algorithm 2 head (reserved now)
+ *
+ *  3) it ends with logical cluster offsets, each offset has y-bit,
+ *     usually y = 12.
+ *   ________________________________________________________________
+ *  | blkaddr | logical cluster types | .. | logical cluster offsets |
+ *  |_4 bytes_|_______(2+x) * n_______|____|_______(2+y) * n_________|
+ */
+
 struct erofs_extent_header {
-	__le32 eh_checksum;
-	__le32 eh_reserved[3];
+	__le32 eh_reserved[4];
 } __packed;
 
 /*
